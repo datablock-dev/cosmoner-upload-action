@@ -1,0 +1,69 @@
+name: Cosmoner Web Hosting Upload
+description: Upload a folder to a Cosmoner web hosting site over SFTP.
+author: Cosmoner
+branding:
+  icon: upload
+  color: purple
+
+inputs:
+  api-key:
+    description: Cosmoner API key with hosting:read. The SFTP login is fetched with it.
+    required: true
+  project-id:
+    description: Project the site is in.
+    required: true
+  site:
+    description: The hosting site's name or id.
+    required: true
+  path:
+    description: Local folder whose contents are uploaded.
+    required: true
+  remote-path:
+    description: Folder on the site to upload into. Defaults to the one the site's own hostname serves.
+    required: false
+  delete:
+    description: Remove files on the site that are not in path, after the upload.
+    required: false
+    default: "false"
+  dry-run:
+    description: List what would change without changing it.
+    required: false
+    default: "false"
+  host-key:
+    description: SHA256 fingerprint(s) of the SFTP gateway's host key, comma-separated. A server presenting another key is refused.
+    required: false
+  cli-version:
+    description: "@cosmoner/cli version or range to run."
+    required: false
+    default: "0.3"
+
+runs:
+  using: composite
+  steps:
+    - name: Upload to ${{ inputs.site }}
+      shell: bash
+      # Every input reaches the script through the environment, never through
+      # ${{ }} inside `run`, which would splice it into the script as code.
+      env:
+        COSMONER_API_KEY: ${{ inputs.api-key }}
+        COSMONER_PROJECT_ID: ${{ inputs.project-id }}
+        COSMONER_SFTP_HOST_KEY: ${{ inputs.host-key }}
+        INPUT_SITE: ${{ inputs.site }}
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_REMOTE_PATH: ${{ inputs.remote-path }}
+        INPUT_DELETE: ${{ inputs.delete }}
+        INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        INPUT_CLI_VERSION: ${{ inputs.cli-version }}
+      run: |
+        set -euo pipefail
+
+        fail() { echo "::error::$1"; exit 2; }
+        [ -n "$INPUT_SITE" ] || fail "The site input is required"
+        [ -n "$INPUT_PATH" ] || fail "The path input is required"
+
+        args=(upload "$INPUT_SITE" "$INPUT_PATH")
+        [ -z "$INPUT_REMOTE_PATH" ] || args+=(--remote "$INPUT_REMOTE_PATH")
+        [ "$INPUT_DELETE" != "true" ] || args+=(--delete)
+        [ "$INPUT_DRY_RUN" != "true" ] || args+=(--dry-run)
+
+        npx --yes "@cosmoner/cli@$INPUT_CLI_VERSION" "${args[@]}"
